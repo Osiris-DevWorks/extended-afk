@@ -660,7 +660,7 @@ class MainWindow:
 
     def _open_paypal(self):
         """Open PayPal donation page"""
-        webbrowser.open("https://paypal.me/RighteousKill")
+        webbrowser.open("https://www.paypal.com/ncp/payment/YAWXHMGZH8T76")
 
     def _open_venmo(self):
         """Open Venmo donation page"""
