@@ -89,7 +89,7 @@ Extended AFK is a free, open-source tool created to help prevent AFK timeouts. I
 
 Your financial support helps fund development of new features:
 
-💳 **[PayPal Donation](https://paypal.me/RighteousKill)** - Support via PayPal
+💳 **[PayPal Donation](https://www.paypal.com/ncp/payment/YAWXHMGZH8T76)** - Support via PayPal
 
 💰 **[Venmo Donation](https://venmo.com/u/Amr-Abouelleil)** - Support via Venmo
 Add a 

@@ -194,7 +194,7 @@ See [CHANGELOG.md](https://github.com/Osiris-RK/extended-afk/blob/main/docs/CHAN
 
 **Need help?** Join our [Discord community](https://discord.gg/BNzRegKZ7k) for support and discussions.
 
-**Support this project:** [PayPal](https://paypal.me/RighteousKill) | [Venmo](https://venmo.com/u/Amr-Abouelleil)
+**Support this project:** [PayPal](https://www.paypal.com/ncp/payment/YAWXHMGZH8T76) | [Venmo](https://venmo.com/u/Amr-Abouelleil)
 ```
 
 ## Version Numbering
