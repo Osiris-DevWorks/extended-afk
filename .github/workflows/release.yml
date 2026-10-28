@@ -1,0 +1,72 @@
+name: Release
+
+# Pushing a vX.Y.Z tag builds the exe on Windows, publishes the GitHub
+# Release with the exe attached and the CHANGELOG section as notes, then
+# posts the Discord announcement. The in-app updater finds the exe by its
+# ExtendedAFK-vX.Y.Z.exe name, so the asset must keep that name.
+#
+#   git tag -a v1.0.3 -m "Release v1.0.3" && git push origin v1.0.3
+#
+# Use "Run workflow" with an existing tag to rebuild a release.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build a release for, e.g. v1.0.3"
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+      DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check version files match the tag
+        run: python scripts/release_tools.py check "$TAG"
+
+      - name: Build exe
+        run: python -m PyInstaller extended-afk.spec --clean --noconfirm
+
+      - name: Write release notes
+        run: |
+          python scripts/release_tools.py notes "$TAG" > release-notes.md
+          ls -l "dist/ExtendedAFK-$TAG.exe"
+
+      - name: Publish GitHub Release
+        id: publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Extended AFK ${{ env.TAG }}
+          body_path: release-notes.md
+          files: dist/ExtendedAFK-${{ env.TAG }}.exe
+          fail_on_unmatched_files: true
+
+      - name: Post Discord announcement
+        if: ${{ env.DISCORD_RELEASE_WEBHOOK_URL != '' }}
+        continue-on-error: true
+        run: python scripts/discord_notify.py "$TAG" "${{ steps.publish.outputs.url }}"

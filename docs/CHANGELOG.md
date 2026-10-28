@@ -7,16 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-28
+
 ### Added
--
+- Automatic updates: Extended AFK checks GitHub for a new version when it starts (or when you click "Check for updates"), shows the release notes, and can download the new version and restart into it. Your settings are kept.
+- The version number now shows in the window title and footer
+- The Activity Log now names the window each key press was sent to, so you can tell when the game didn't have focus
+- The Activity Log now warns when Extended AFK isn't running as administrator, because Windows blocks key presses to games that run as administrator
+- Application icon in the taskbar and title bar
+- GitHub Actions now build the exe for every pull request and publish releases when a version tag is pushed
 
 ### Changed
--
+- The exe file name now includes the version (e.g. `ExtendedAFK-v1.0.3.exe`)
+- Updated the PayPal donation link and the donation button images
 
 ### Fixed
--
+- Keys are now held down for 100 ms instead of being tapped instantly, so games that check input once per frame no longer miss the press (#5)
+- "Use Toggle Behavior" now waits 2 seconds between the two presses, so games register both and the toggle actually takes effect (#2)
+- Corrected the years on earlier changelog entries
 
-## [1.0.2] - 2024-12-17
+## [1.0.2] - 2025-12-17
 
 ### Added
 - Complete release infrastructure with CHANGELOG.md and RELEASE_PROCESS.md
@@ -33,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Improved requirements.txt with explicit ttkbootstrap and python-dotenv dependencies
 
-## [1.0.1] - 2024-12-15
+## [1.0.1] - 2025-12-15
 
 ### Fixed
 - Fixed window border obstruction and improved theme integration
@@ -51,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Queue-based logging to prevent GUI freezing
 - Per-key settings with individual "Press Twice" checkboxes
 
-## [1.0.0] - 2024-12-15
+## [1.0.0] - 2025-12-15
 
 ### Added
 - Initial release of Extended AFK Auto Key Presser

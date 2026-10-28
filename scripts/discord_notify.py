@@ -3,7 +3,7 @@ Discord Release Notification Script
 
 Posts release announcements to Discord via webhook.
 Usage: python scripts/discord_notify.py <version> <release_url>
-Example: python scripts/discord_notify.py v1.0.2 https://github.com/Osiris-RK/extended-afk/releases/tag/v1.0.2
+Example: python scripts/discord_notify.py v1.0.2 https://github.com/Osiris-DevWorks/extended-afk/releases/tag/v1.0.2
 """
 
 import os
@@ -110,7 +110,7 @@ def create_embed(version: str, release_url: str) -> dict:
             "text": "Extended AFK"
         },
         "thumbnail": {
-            "url": "https://raw.githubusercontent.com/Osiris-RK/extended-afk/main/assets/osiris-devworks.png"
+            "url": "https://raw.githubusercontent.com/Osiris-DevWorks/extended-afk/main/assets/osiris-devworks.png"
         }
     }
 
@@ -167,7 +167,7 @@ def send_discord_notification(version: str, release_url: str) -> bool:
 def main():
     if len(sys.argv) != 3:
         print("Usage: python scripts/discord_notify.py <version> <release_url>")
-        print("Example: python scripts/discord_notify.py v1.0.2 https://github.com/Osiris-RK/extended-afk/releases/tag/v1.0.2")
+        print("Example: python scripts/discord_notify.py v1.0.2 https://github.com/Osiris-DevWorks/extended-afk/releases/tag/v1.0.2")
         sys.exit(1)
 
     version = sys.argv[1]

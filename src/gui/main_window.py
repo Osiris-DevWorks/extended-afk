@@ -5,14 +5,18 @@ import ttkbootstrap as ttk_bootstrap
 from ttkbootstrap.constants import *
 import webbrowser
 import logging
+import queue
+import threading
 from PIL import Image, ImageTk
 import os
 
 from core.settings import AppSettings
 from core.key_presser import KeyPresser
+from core import updater
 from utils.resource_path import get_resource_path
 from gui.key_selector import select_key
 from gui.text_handler import TextHandler, SimpleFormatter
+from gui.update_dialog import UpdateDialog
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +40,9 @@ class MainWindow:
             root: tkinter.Tk root window
         """
         self.root = root
-        self.root.title("Extended AFK - Auto Key Presser")
-        self.root.geometry("550x720")
+        self.version = updater.get_current_version()
+        self.root.title(f"Extended AFK v{self.version} - Auto Key Presser")
+        self.root.geometry("550x745")
         self.root.resizable(False, False)
 
         # Set window icon (for taskbar and title bar)
@@ -68,6 +73,11 @@ class MainWindow:
 
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Check GitHub for a newer release once the window is up
+        self._update_queue = queue.Queue()
+        self._update_check_running = False
+        self.root.after(1500, self._check_for_updates, False)
 
     def _build_ui(self):
         """Build the user interface"""
@@ -250,6 +260,24 @@ class MainWindow:
 
         # Venmo button
         self._create_venmo_button(footer_frame)
+
+        # Version and update check
+        version_frame = ttk.Frame(parent)
+        version_frame.pack(fill=tk.X, padx=5, pady=(8, 0))
+        ttk.Label(
+            version_frame,
+            text=f"v{self.version}",
+            font=("Segoe UI", 8)
+        ).pack(side=tk.LEFT)
+        self.update_link = ttk.Label(
+            version_frame,
+            text="Check for updates",
+            font=("Segoe UI", 8, "underline"),
+            foreground=ACCENT_COLOR,
+            cursor="hand2"
+        )
+        self.update_link.pack(side=tk.RIGHT)
+        self.update_link.bind("<Button-1>", lambda e: self._check_for_updates(True))
 
     def _create_osiris_button(self, parent):
         """Create Osiris DevWorks button"""
@@ -665,6 +693,53 @@ class MainWindow:
     def _open_venmo(self):
         """Open Venmo donation page"""
         webbrowser.open("https://venmo.com/u/Amr-Abouelleil")
+
+    def _check_for_updates(self, manual):
+        """
+        Check GitHub for a newer release on a worker thread.
+
+        Args:
+            manual: True when the user clicked the link, so we also report
+                "up to date" and errors instead of staying quiet
+        """
+        if self._update_check_running:
+            return
+        self._update_check_running = True
+        self.update_link.config(text="Checking...")
+
+        def worker():
+            try:
+                self._update_queue.put(("ok", updater.check_for_update()))
+            except Exception as e:
+                logger.warning(f"Update check failed: {e}")
+                self._update_queue.put(("error", str(e)))
+
+        threading.Thread(target=worker, daemon=True).start()
+        self._poll_update_check(manual)
+
+    def _poll_update_check(self, manual):
+        """Pick up the update check result on the main thread"""
+        try:
+            status, result = self._update_queue.get_nowait()
+        except queue.Empty:
+            self.root.after(200, self._poll_update_check, manual)
+            return
+
+        self._update_check_running = False
+        self.update_link.config(text="Check for updates")
+
+        if status == "error":
+            if manual:
+                messagebox.showwarning(
+                    "Update Check Failed",
+                    f"Couldn't reach GitHub to check for updates:\n{result}"
+                )
+        elif result is None:
+            if manual:
+                messagebox.showinfo("No Updates", f"You're on the latest version (v{self.version}).")
+        else:
+            logger.info(f"Update available: v{result['version']}")
+            UpdateDialog(self.root, result, self.version, on_restart=self._on_close)
 
     def _on_close(self):
         """Handle window close event"""

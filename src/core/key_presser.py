@@ -5,7 +5,13 @@ import random
 import threading
 import logging
 
+from utils.windows import is_admin, foreground_window_title
+
 logger = logging.getLogger(__name__)
+
+# How long each key is held down. Many games poll input once per frame, so an
+# instant press-and-release can fall between two polls and never register.
+KEY_HOLD_SECONDS = 0.1
 
 
 class KeyPresser:
@@ -72,6 +78,14 @@ class KeyPresser:
     def _run(self):
         """Main thread worker function"""
         try:
+            if not is_admin():
+                logger.info(
+                    "Extended AFK is not running as administrator. If your game "
+                    "runs as administrator, Windows will block these key presses; "
+                    "right-click Extended AFK and choose 'Run as administrator'."
+                )
+            logger.info("Key presses go to the focused window, so keep the game in focus.")
+
             # Initial delay
             self._send_status("Initializing... (5 second countdown)")
 
@@ -135,8 +149,7 @@ class KeyPresser:
                 try:
                     logger.debug(f"Pressing key {i+1}/{len(self.keys_config)}: {key_name} (press_twice={press_twice})")
 
-                    # Press and release using keyboard library
-                    keyboard.press_and_release(key_name)
+                    self._tap(key_name)
                     pressed_keys.append(key_name.upper())
                     logger.debug(f"Successfully pressed: {key_name}")
 
@@ -147,7 +160,7 @@ class KeyPresser:
                             logger.debug("Stop requested during toggle interval")
                             return
                         logger.debug(f"Pressing second time: {key_name}")
-                        keyboard.press_and_release(key_name)
+                        self._tap(key_name)
                         logger.debug(f"Successfully pressed second time: {key_name}")
 
                     # Delay between different keys
@@ -159,7 +172,11 @@ class KeyPresser:
 
             if pressed_keys:
                 keys_str = " + ".join(pressed_keys)
-                logger.info(f"Pressed: {keys_str}")
+                window = foreground_window_title()
+                if window:
+                    logger.info(f"Pressed: {keys_str} (sent to '{window}')")
+                else:
+                    logger.info(f"Pressed: {keys_str}")
                 self._send_status(f"Pressed: {keys_str}")
             else:
                 logger.warning("No keys were successfully pressed")
@@ -167,6 +184,19 @@ class KeyPresser:
         except Exception as e:
             logger.error(f"Error in _press_keys: {e}", exc_info=True)
             self._send_status(f"Error pressing keys")
+
+    def _tap(self, key_name):
+        """
+        Press a key (or combo like 'ctrl+a'), hold it briefly, then release it.
+
+        Args:
+            key_name: Key name understood by the keyboard library
+        """
+        keyboard.press(key_name)
+        try:
+            time.sleep(KEY_HOLD_SECONDS)
+        finally:
+            keyboard.release(key_name)
 
     def _send_status(self, message):
         """
