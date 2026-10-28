@@ -2,7 +2,7 @@
 
 **For:** Release managers - Creating and publishing new versions
 
-Releases are built and published by GitHub Actions (`.github/workflows/release.yml`). Pushing a `vX.Y.Z` tag builds the exe on a Windows runner, publishes the GitHub Release with the exe attached, and posts the Discord announcement. Nothing needs to be built locally.
+Releases are built and published by GitHub Actions (`.github/workflows/release.yml`), the same way as Smart Citizen. Merging a version bump to `main` builds the exe on a Windows runner, creates the `vX.Y.Z` tag, publishes the GitHub Release with the exe attached, and posts the Discord announcement. Nothing needs to be built, tagged, or run locally.
 
 ## Pre-Release Checklist
 
@@ -28,41 +28,33 @@ python scripts/release_tools.py check
 
 The PR's **Build** workflow runs the same check and builds the exe.
 
-### 2. Merge the PR to Main
+### 2. Review the Release Notes
 
-### 3. Review the Release Notes
-
-The release notes are the version's CHANGELOG section plus a downloads footer. Preview them and review them with the user before tagging:
+The release notes are the version's CHANGELOG section plus a downloads footer. Preview them and review them with the user before merging:
 ```bash
 python scripts/release_tools.py notes X.Y.Z
 ```
 
-### 4. Tag and Push
+### 3. Merge the PR to Main
 
-```bash
-git checkout main
-git pull origin main
-git tag -a vX.Y.Z -m "Release vX.Y.Z - <Brief Description>"
-git push origin vX.Y.Z
-```
-
-The **Release** workflow then:
-1. Fails if the tag doesn't match `VERSION.TXT`, the spec, and the changelog
+Merging is the release. On every push to `main`, the **Release** workflow reads `VERSION.TXT` and, if no release exists for that version yet:
+1. Fails if `VERSION.TXT`, the spec, and the changelog disagree
 2. Builds `dist/ExtendedAFK-vX.Y.Z.exe`
-3. Publishes the GitHub Release with the exe attached
-4. Posts to Discord with `scripts/discord_notify.py`, after the release is live (needs the `DISCORD_RELEASE_WEBHOOK_URL` repository secret; skipped if it isn't set)
+3. Creates and pushes the `vX.Y.Z` tag
+4. Publishes the GitHub Release with the exe attached
+5. Posts to Discord with `scripts/discord_notify.py`, after the release is live (needs the `DISCORD_RELEASE_WEBHOOK_URL` repository secret; skipped if it isn't set)
 
-Watch it at https://github.com/Osiris-DevWorks/extended-afk/actions.
+Pushes to `main` that don't bump the version find the release already exists and do nothing. Watch it at https://github.com/Osiris-DevWorks/extended-afk/actions.
 
 **The exe asset must keep the `ExtendedAFK-vX.Y.Z.exe` name.** The in-app updater finds the download by that name; a release without it makes the updater fall back to opening the release page.
 
-### 5. Verify
+### 4. Verify
 
 - [ ] The release is live at https://github.com/Osiris-DevWorks/extended-afk/releases/latest with the exe attached
 - [ ] The Discord announcement posted
 - [ ] An older version offers the update and restarts into the new one
 
-### 6. Update the Website Tile
+### 5. Update the Website Tile
 
 Update the Extended AFK entry in `../osiris-devworks-website/src/data/projects.ts`: bump the static `version` fallback and refresh `features`/`status` for what shipped. Pushing the website repo's `main` deploys it.
 
@@ -95,13 +87,5 @@ This project follows [Semantic Versioning](https://semver.org/):
 
 ## Troubleshooting
 
-### Tag Already Exists or Points at the Wrong Commit
-```bash
-git tag -d vX.Y.Z
-git push --delete origin vX.Y.Z
-git tag -a vX.Y.Z -m "Release vX.Y.Z - <Description>"
-git push origin vX.Y.Z
-```
-
-### Version Check Fails
-Fix the mismatch on main in a PR, then delete and re-push the tag.
+### Release Workflow Failed
+Fix the cause on main in a PR. If the release was never published, the merge of that fix publishes it. If the tag already exists, use **Run workflow** with the tag instead.
