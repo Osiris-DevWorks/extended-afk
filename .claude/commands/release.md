@@ -9,5 +9,7 @@ To invoke, type `/release`
 Perform the following steps for a release:
 
 1. Follow all the instructions for releasing the software that are in `docs/RELEASE_PROCESS.md`
-2. Make sure to build the executable and test it before creating the GitHub release
-3. Post the Discord notification after the GitHub release is live
+2. Make sure the version bump PR's Build workflow passed and the exe from its artifacts was tested before tagging
+3. Review the release notes (`python scripts/release_tools.py notes X.Y.Z`) with the user before pushing the tag
+4. After pushing the tag, watch the Release workflow until the GitHub release is live and the Discord post has gone out; if the Discord step was skipped or failed, post it manually
+5. Update the website tile as described in the release process

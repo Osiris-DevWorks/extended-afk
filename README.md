@@ -14,15 +14,19 @@ A simple GUI application for automatically pressing keyboard keys at random inte
 
 ## Download & Installation
 
-You can download Extended AFK from the [GitHub Releases page](https://github.com/Osiris-RK/extended-afk/releases).
+You can download Extended AFK from the [GitHub Releases page](https://github.com/Osiris-DevWorks/extended-afk/releases).
 
 ### Standalone Executable
 
-**`ExtendedAFK.exe`** - Portable version (no installation required)
+**`ExtendedAFK-vX.Y.Z.exe`** - Portable version (no installation required)
 
-1. Download `ExtendedAFK.exe` from the releases page
+1. Download the latest `ExtendedAFK-vX.Y.Z.exe` from the releases page
 2. Run the executable
 3. Configure your keys and run the application
+
+### Updates
+
+From v1.0.3 on, Extended AFK checks GitHub for a newer version each time it starts. When one is available it shows the release notes and offers **Update Now**, which downloads the new exe into the same folder, replaces the old one, and restarts. Your settings are kept. You can also click **Check for updates** at the bottom of the window. If you have v1.0.2 or older, download v1.0.3 manually once.
 
 ## System Requirements
 
@@ -41,11 +45,11 @@ You can download Extended AFK from the [GitHub Releases page](https://github.com
    - The application will randomly wait between these intervals
 
 3. **Options**:
-   - Check "Press each key twice" to press each key two times with a 1-second delay
+   - Check "Use Toggle Behavior" for keys that toggle something on and off. Each key is pressed twice, 2 seconds apart, so it ends up back where it started
 
 4. **Start/Stop**:
-   - Click "START PRESSING KEYS" to begin
-   - Click "STOP PRESSING KEYS" to pause
+   - Click "Start" to begin
+   - Click "Stop" to pause
    - Configuration is locked while running
 
 5. **Monitor Activity**:
@@ -54,12 +58,18 @@ You can download Extended AFK from the [GitHub Releases page](https://github.com
 
 ## Important Notes
 
+### Still Getting Kicked for Being AFK?
+
+- **Keep the game focused.** Key presses go to whichever window is in front. The Activity Log shows the window each press was sent to, so check that it names your game.
+- **Run as administrator if your game does.** Windows blocks key presses sent from a normal app to an app running as administrator. Right-click Extended AFK and choose **Run as administrator**.
+- **Some games ignore simulated input**, especially ones with anti-cheat. Extended AFK can't work around that.
+
 ### Antivirus Warnings
 
 Some antivirus software may flag keystroke simulation tools as potentially unwanted. This is a false positive. The application:
 - Is open source
 - Only simulates keypresses locally
-- Does not send data anywhere
+- Only goes online to check GitHub for updates
 - Does not record your keystrokes
 
 If your antivirus blocks the application, you may need to add it to your exclusions list.

@@ -1,0 +1,46 @@
+name: Build
+
+# Builds the exe on every PR so a broken build or out-of-sync version is
+# caught before merge. The built exe is uploaded as a workflow artifact for
+# testing; publishing happens in release.yml.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check version files agree
+        run: python scripts/release_tools.py check
+
+      - name: Compile sources
+        run: python -m compileall -q src scripts
+
+      - name: Build exe
+        run: python -m PyInstaller extended-afk.spec --clean --noconfirm
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: extended-afk-exe
+          path: dist/*.exe
+          retention-days: 14
