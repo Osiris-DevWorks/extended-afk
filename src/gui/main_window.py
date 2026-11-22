@@ -41,8 +41,8 @@ class MainWindow:
         """
         self.root = root
         self.version = updater.get_current_version()
-        self.root.title(f"Extended AFK v{self.version} - Auto Key Presser")
-        self.root.geometry("550x745")
+        self.root.title("Extended AFK - Auto Key Presser")
+        self.root.geometry("550x720")
         self.root.resizable(False, False)
 
         # Set window icon (for taskbar and title bar)
@@ -260,24 +260,6 @@ class MainWindow:
 
         # Venmo button
         self._create_venmo_button(footer_frame)
-
-        # Version and update check
-        version_frame = ttk.Frame(parent)
-        version_frame.pack(fill=tk.X, padx=5, pady=(8, 0))
-        ttk.Label(
-            version_frame,
-            text=f"v{self.version}",
-            font=("Segoe UI", 8)
-        ).pack(side=tk.LEFT)
-        self.update_link = ttk.Label(
-            version_frame,
-            text="Check for updates",
-            font=("Segoe UI", 8, "underline"),
-            foreground=ACCENT_COLOR,
-            cursor="hand2"
-        )
-        self.update_link.pack(side=tk.RIGHT)
-        self.update_link.bind("<Button-1>", lambda e: self._check_for_updates(True))
 
     def _create_osiris_button(self, parent):
         """Create Osiris DevWorks button"""
@@ -699,13 +681,12 @@ class MainWindow:
         Check GitHub for a newer release on a worker thread.
 
         Args:
-            manual: True when the user clicked the link, so we also report
-                "up to date" and errors instead of staying quiet
+            manual: True to also report "up to date" and errors instead of
+                staying quiet (the launch check passes False)
         """
         if self._update_check_running:
             return
         self._update_check_running = True
-        self.update_link.config(text="Checking...")
 
         def worker():
             try:
@@ -726,7 +707,6 @@ class MainWindow:
             return
 
         self._update_check_running = False
-        self.update_link.config(text="Check for updates")
 
         if status == "error":
             if manual:

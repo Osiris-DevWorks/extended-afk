@@ -26,7 +26,7 @@ You can download Extended AFK from the [GitHub Releases page](https://github.com
 
 ### Updates
 
-From v1.0.3 on, Extended AFK checks GitHub for a newer version each time it starts. When one is available it shows the release notes and offers **Update Now**, which downloads the new exe into the same folder, replaces the old one, and restarts. Your settings are kept. You can also click **Check for updates** at the bottom of the window. If you have v1.0.2 or older, download v1.0.3 manually once.
+From v1.0.3 on, Extended AFK checks GitHub for a newer version each time it starts. When one is available it shows the release notes and offers **Update Now**, which downloads the new exe into the same folder, replaces the old one, and restarts. Your settings are kept. If you have v1.0.2 or older, download v1.0.3 manually once.
 
 ## System Requirements
 

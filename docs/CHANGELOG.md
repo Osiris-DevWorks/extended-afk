@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Restored the v1.0.2 window layout: the title no longer carries the version and the version / "Check for updates" row under the footer is gone. Extended AFK still checks for updates when it starts and shows the update prompt when one is available.
+
 ## [1.0.3] - 2026-10-28
 
 ### Added
