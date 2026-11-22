@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-11-22
+
 ### Changed
 - New look that matches Smart Citizen: the Osiris DevWorks navy and gold theme, a branded title, flat gold, sage and copper buttons, and the Osiris, Discord and donation links along the bottom
 - A status bar along the bottom shows when the next key press is due, and the version on its right. Click the version to check for updates; it lights up when a new version is out
