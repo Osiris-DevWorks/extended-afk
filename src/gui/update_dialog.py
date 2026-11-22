@@ -1,12 +1,14 @@
 """Update-available dialog with release notes and download progress"""
 import tkinter as tk
 from tkinter import ttk
+import ttkbootstrap as ttk_bootstrap
 import threading
 import queue
 import webbrowser
 import logging
 
 from core import updater
+from gui import theme
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +69,15 @@ class UpdateDialog:
 
         notes_frame = ttk.Frame(frame)
         notes_frame.pack(fill=tk.BOTH, expand=True)
-        scrollbar = ttk.Scrollbar(notes_frame)
+        scrollbar = ttk_bootstrap.Scrollbar(notes_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         notes = tk.Text(
             notes_frame,
             height=12,
             wrap=tk.WORD,
-            font=("Segoe UI", 9),
             yscrollcommand=scrollbar.set
         )
+        theme.style_text(notes)
         notes.insert("1.0", self.info.get("notes") or "No release notes.")
         notes.config(state='disabled')
         notes.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -89,16 +91,20 @@ class UpdateDialog:
                      "Your settings are kept."
             )
 
-        self.progress = ttk.Progressbar(frame, mode='determinate', maximum=100)
+        self.progress = ttk_bootstrap.Progressbar(frame, mode='determinate', maximum=100)
 
         buttons = ttk.Frame(frame)
         buttons.pack(fill=tk.X, pady=(10, 0))
-        self.later_button = ttk.Button(buttons, text="Later", command=self._on_later)
+        self.later_button = theme.action_button(buttons, "Later", theme.BUTTON_SLATE, self._on_later)
         self.later_button.pack(side=tk.RIGHT)
         if self.can_auto_update:
-            self.primary_button = ttk.Button(buttons, text="Update Now", command=self._on_update)
+            self.primary_button = theme.action_button(
+                buttons, "Update Now", theme.BUTTON_SAGE, self._on_update, bold=True)
+            self._primary_color = theme.BUTTON_SAGE
         else:
-            self.primary_button = ttk.Button(buttons, text="Open Release Page", command=self._on_open_page)
+            self.primary_button = theme.action_button(
+                buttons, "Open Release Page", theme.BUTTON_GOLD, self._on_open_page)
+            self._primary_color = theme.BUTTON_GOLD
         self.primary_button.pack(side=tk.RIGHT, padx=(0, 10))
 
     def _on_open_page(self):
@@ -109,14 +115,14 @@ class UpdateDialog:
         if self._downloading:
             # Cancel; the worker reports back and the dialog stays open
             self._cancel_event.set()
-            self.later_button.config(state='disabled')
+            theme.set_button_enabled(self.later_button, theme.BUTTON_SLATE, False)
             return
         self._close()
 
     def _on_update(self):
         url, name, size = self.info["asset"]
         self._downloading = True
-        self.primary_button.config(state='disabled')
+        theme.set_button_enabled(self.primary_button, self._primary_color, False)
         self.later_button.config(text="Cancel")
         self.status_label.config(text="Downloading...")
         self.progress.pack(fill=tk.X, pady=(5, 0), before=self.later_button.master)
@@ -167,8 +173,11 @@ class UpdateDialog:
                     self.status_label.config(
                         text=f"Download failed: {msg[1][:120]}\nYou can download it from the release page instead."
                     )
-                    self.later_button.config(text="Later", state='normal')
-                    self.primary_button.config(text="Open Release Page", command=self._on_open_page, state='normal')
+                    self.later_button.config(text="Later")
+                    theme.set_button_enabled(self.later_button, theme.BUTTON_SLATE, True)
+                    self._primary_color = theme.BUTTON_GOLD
+                    self.primary_button.config(text="Open Release Page", command=self._on_open_page, font=(theme.UI_FONT, 9))
+                    theme.set_button_enabled(self.primary_button, self._primary_color, True)
                     return
         except queue.Empty:
             pass
@@ -185,7 +194,8 @@ class UpdateDialog:
             self.status_label.config(
                 text=f"Couldn't restart automatically. The new version was saved to:\n{new_exe}"
             )
-            self.later_button.config(text="Close", state='normal')
+            self.later_button.config(text="Close")
+            theme.set_button_enabled(self.later_button, theme.BUTTON_SLATE, True)
             return
         self._downloading = False
         self._close()

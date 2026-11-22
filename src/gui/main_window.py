@@ -1,8 +1,13 @@
-"""Main GUI window for Extended AFK application"""
+"""Main GUI window for Extended AFK application
+
+The look follows Smart Citizen's Osiris DevWorks theme (see gui/theme.py):
+branded title and tagline at the top, flat accent-colored buttons with dark
+text, the Osiris / Discord / donation image row along the bottom, and a
+status bar with the version on the right.
+"""
 import tkinter as tk
 from tkinter import ttk, messagebox
 import ttkbootstrap as ttk_bootstrap
-from ttkbootstrap.constants import *
 import webbrowser
 import logging
 import queue
@@ -14,19 +19,25 @@ from core.settings import AppSettings
 from core.key_presser import KeyPresser
 from core import updater
 from utils.resource_path import get_resource_path
+from gui import theme
 from gui.key_selector import select_key
 from gui.text_handler import TextHandler, SimpleFormatter
 from gui.update_dialog import UpdateDialog
 
 logger = logging.getLogger(__name__)
 
-# Colors matching sc-profile-editor
-BG_COLOR = "#f0f0f0"
-FRAME_BG = "#ffffff"
-ACCENT_COLOR = "#c9a961"
-TEXT_COLOR = "#333333"
-BUTTON_START_COLOR = "#4CAF50"
-BUTTON_STOP_COLOR = "#f44336"
+MAX_KEYS = 3
+FOOTER_IMAGE_HEIGHT = 32
+
+DISCORD_URL = "https://discord.gg/BNzRegKZ7k"
+GITHUB_URL = "https://github.com/Osiris-DevWorks"
+PAYPAL_URL = "https://www.paypal.com/ncp/payment/YAWXHMGZH8T76"
+VENMO_URL = "https://venmo.com/u/Amr-Abouelleil"
+
+
+def _spaced(text):
+    """Uppercase *text* with hair spaces between letters, like Smart Citizen's tagline."""
+    return " ".join(text.upper())
 
 
 class MainWindow:
@@ -41,9 +52,12 @@ class MainWindow:
         """
         self.root = root
         self.version = updater.get_current_version()
-        self.root.title(f"Extended AFK v{self.version} - Auto Key Presser")
-        self.root.geometry("550x745")
+        self.root.title(f"Extended AFK v{self.version}")
+        self.root.geometry("560x790")
         self.root.resizable(False, False)
+
+        theme.apply_theme(ttk_bootstrap.Style())
+        self.root.configure(bg=theme.WINDOW_BG)
 
         # Set window icon (for taskbar and title bar)
         try:
@@ -59,8 +73,11 @@ class MainWindow:
         # Key presser (will be initialized when started)
         self.key_presser = None
 
-        # Key list widgets (for dynamic key management)
-        self.key_frames = []
+        # One dict per configured key: frame, key, press_twice_var, label, buttons
+        self.key_rows = []
+
+        # Latest status line from the key presser thread, picked up by _poll_status
+        self._pending_status = None
 
         # Build UI
         self._build_ui()
@@ -74,32 +91,60 @@ class MainWindow:
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        self._poll_status()
+
         # Check GitHub for a newer release once the window is up
         self._update_queue = queue.Queue()
         self._update_check_running = False
+        self._available_update = None
         self.root.after(1500, self._check_for_updates, False)
+
+    # ------------------------------------------------------------------ build
 
     def _build_ui(self):
         """Build the user interface"""
-        # Main container - use ttk.Frame for proper theming
-        main_container = ttk.Frame(self.root, padding=15)
+        # Status bar first so it claims the bottom edge
+        self._build_status_bar(self.root)
+
+        main_container = ttk.Frame(self.root, padding=(15, 10, 15, 8))
         main_container.pack(fill=tk.BOTH, expand=True)
 
-        # Configuration section
+        self._build_header(main_container)
         self._build_configuration_section(main_container)
-
-        # Start/Stop button
         self._build_control_button(main_container)
-
-        # Activity log section
+        self._build_footer(main_container)
         self._build_log_section(main_container)
 
-        # Footer with branding
-        self._build_footer(main_container)
+    def _build_header(self, parent):
+        """Branded title and tagline, as at the top of Smart Citizen"""
+        header = ttk.Frame(parent)
+        header.pack(fill=tk.X, padx=5, pady=(0, 8))
+
+        tk.Label(
+            header,
+            text="EXTENDED AFK",
+            font=theme.title_font(),
+            fg=theme.TITLE_COLOR,
+            bg=theme.WINDOW_BG,
+            anchor=tk.W
+        ).pack(fill=tk.X)
+        tk.Label(
+            header,
+            text=_spaced("Stay in game while you step away"),
+            font=(theme.UI_FONT, 8),
+            fg=theme.TAGLINE_COLOR,
+            bg=theme.WINDOW_BG,
+            anchor=tk.W
+        ).pack(fill=tk.X)
+
+    def _action_button(self, parent, text, color, command, bold=False):
+        return theme.action_button(parent, text, color, command, bold=bold)
+
+    def _set_button_enabled(self, button, color, enabled):
+        theme.set_button_enabled(button, color, enabled)
 
     def _build_configuration_section(self, parent):
         """Build the configuration section"""
-        # Configuration frame
         config_frame = ttk.LabelFrame(
             parent,
             text=" Configuration ",
@@ -107,44 +152,35 @@ class MainWindow:
         )
         config_frame.pack(fill=tk.BOTH, padx=5, pady=5)
 
-        # Keys section
-        keys_label = ttk.Label(
+        ttk.Label(
             config_frame,
             text="Keys to Press:",
-            font=("Segoe UI", 10, "bold")
-        )
-        keys_label.pack(anchor=tk.W, pady=(0, 5))
+            font=(theme.UI_FONT, 10, "bold")
+        ).pack(anchor=tk.W, pady=(0, 5))
 
-        # Keys container
         self.keys_container = ttk.Frame(config_frame)
-        self.keys_container.pack(fill=tk.X, pady=(0, 10))
+        self.keys_container.pack(fill=tk.X, pady=(0, 6))
 
-        # Add key button
         add_key_frame = ttk.Frame(config_frame)
-        add_key_frame.pack(fill=tk.X, pady=(0, 15))
+        add_key_frame.pack(fill=tk.X, pady=(0, 12))
 
-        self.add_key_button = ttk.Button(
-            add_key_frame,
-            text="Add Key...",
-            command=self._add_key
+        self.add_key_button = self._action_button(
+            add_key_frame, "Add Key...", theme.BUTTON_GOLD, self._add_key
         )
         self.add_key_button.pack(side=tk.RIGHT)
 
-        # Interval section
-        interval_label = ttk.Label(
+        ttk.Label(
             config_frame,
             text="Interval (minutes):",
-            font=("Segoe UI", 10, "bold")
-        )
-        interval_label.pack(anchor=tk.W, pady=(0, 5))
+            font=(theme.UI_FONT, 10, "bold")
+        ).pack(anchor=tk.W, pady=(0, 5))
 
         interval_frame = ttk.Frame(config_frame)
-        interval_frame.pack(fill=tk.X, pady=(0, 15))
+        interval_frame.pack(fill=tk.X)
 
-        # Min interval
         ttk.Label(interval_frame, text="Min:").pack(side=tk.LEFT, padx=(0, 5))
         self.min_interval_var = tk.IntVar(value=10)
-        min_spinbox = ttk.Spinbox(
+        self.min_spinbox = ttk_bootstrap.Spinbox(
             interval_frame,
             from_=1,
             to=60,
@@ -152,12 +188,11 @@ class MainWindow:
             width=5,
             command=self._on_settings_changed
         )
-        min_spinbox.pack(side=tk.LEFT, padx=(0, 20))
+        self.min_spinbox.pack(side=tk.LEFT, padx=(0, 20))
 
-        # Max interval
         ttk.Label(interval_frame, text="Max:").pack(side=tk.LEFT, padx=(0, 5))
         self.max_interval_var = tk.IntVar(value=14)
-        max_spinbox = ttk.Spinbox(
+        self.max_spinbox = ttk_bootstrap.Spinbox(
             interval_frame,
             from_=1,
             to=60,
@@ -165,47 +200,28 @@ class MainWindow:
             width=5,
             command=self._on_settings_changed
         )
-        max_spinbox.pack(side=tk.LEFT)
+        self.max_spinbox.pack(side=tk.LEFT)
 
     def _build_control_button(self, parent):
         """Build the start/stop control buttons"""
         button_frame = ttk.Frame(parent)
         button_frame.pack(fill=tk.X, padx=5, pady=10)
 
-        # Start button
-        self.start_button = tk.Button(
-            button_frame,
-            text="Start",
-            command=self._start_pressing,
-            bg=BUTTON_START_COLOR,
-            fg="white",
-            font=("Segoe UI", 11, "bold"),
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=20,
-            pady=12
+        self.start_button = self._action_button(
+            button_frame, "Start", theme.BUTTON_SAGE, self._start_pressing, bold=True
         )
+        self.start_button.config(font=(theme.UI_FONT, 11, "bold"), pady=10)
         self.start_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
 
-        # Stop button
-        self.stop_button = tk.Button(
-            button_frame,
-            text="Stop",
-            command=self._stop_pressing,
-            bg=BUTTON_STOP_COLOR,
-            fg="white",
-            font=("Segoe UI", 11, "bold"),
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=20,
-            pady=12,
-            state='disabled'
+        self.stop_button = self._action_button(
+            button_frame, "Stop", theme.BUTTON_COPPER, self._stop_pressing, bold=True
         )
+        self.stop_button.config(font=(theme.UI_FONT, 11, "bold"), pady=10)
         self.stop_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        self._set_button_enabled(self.stop_button, theme.BUTTON_COPPER, False)
 
     def _build_log_section(self, parent):
         """Build the activity log section"""
-        # Log frame
         log_frame = ttk.LabelFrame(
             parent,
             text=" Activity Log ",
@@ -213,210 +229,114 @@ class MainWindow:
         )
         log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # Text widget with scrollbar
         text_container = ttk.Frame(log_frame)
         text_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        scrollbar = ttk.Scrollbar(text_container)
+        scrollbar = ttk_bootstrap.Scrollbar(text_container)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.log_text = tk.Text(
             text_container,
-            height=10,
+            height=8,
             width=60,
             yscrollcommand=scrollbar.set,
-            font=("Consolas", 9),
             state='disabled',
             wrap=tk.WORD
         )
+        theme.style_text(self.log_text, font=(theme.MONO_FONT, 9))
         self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.log_text.yview)
 
     def _build_footer(self, parent):
-        """Build the footer with branding and donation links"""
-        # Footer frame
+        """Osiris DevWorks and Discord on the left, donations on the right"""
         footer_frame = ttk.Frame(parent)
-        footer_frame.pack(fill=tk.X, padx=5, pady=(10, 0))
+        footer_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=(10, 0))
 
-        # Osiris DevWorks button (left)
-        self._create_osiris_button(footer_frame)
+        self._image_link(footer_frame, "osiris-devworks.png", "Osiris DevWorks",
+                         GITHUB_URL).pack(side=tk.LEFT)
+        self._image_link(footer_frame, "discord.png", "Join the Discord",
+                         DISCORD_URL).pack(side=tk.LEFT, padx=(10, 0))
 
-        # Spacer
-        ttk.Frame(footer_frame, width=10).pack(side=tk.LEFT)
+        self._image_link(footer_frame, "venmo.png", "Donate via Venmo",
+                         VENMO_URL).pack(side=tk.RIGHT)
+        self._image_link(footer_frame, "paypal.png", "Donate via PayPal",
+                         PAYPAL_URL).pack(side=tk.RIGHT, padx=(0, 10))
 
-        # Support label
-        support_label = ttk.Label(
-            footer_frame,
-            text="Support:",
-            font=("Segoe UI", 9)
-        )
-        support_label.pack(side=tk.LEFT, padx=(10, 5))
+    def _image_link(self, parent, image_name, fallback_text, url):
+        """
+        A clickable image (or gold text if the image is missing) that opens *url*.
 
-        # PayPal button
-        self._create_paypal_button(footer_frame)
-
-        # Spacer
-        ttk.Frame(footer_frame, width=5).pack(side=tk.LEFT)
-
-        # Venmo button
-        self._create_venmo_button(footer_frame)
-
-        # Version and update check
-        version_frame = ttk.Frame(parent)
-        version_frame.pack(fill=tk.X, padx=5, pady=(8, 0))
-        ttk.Label(
-            version_frame,
-            text=f"v{self.version}",
-            font=("Segoe UI", 8)
-        ).pack(side=tk.LEFT)
-        self.update_link = ttk.Label(
-            version_frame,
-            text="Check for updates",
-            font=("Segoe UI", 8, "underline"),
-            foreground=ACCENT_COLOR,
-            cursor="hand2"
-        )
-        self.update_link.pack(side=tk.RIGHT)
-        self.update_link.bind("<Button-1>", lambda e: self._check_for_updates(True))
-
-    def _create_osiris_button(self, parent):
-        """Create Osiris DevWorks button"""
-        try:
-            # Try to load image
-            image_path = get_resource_path(os.path.join("assets", "osiris-devworks.png"))
-            if os.path.exists(image_path):
-                img = Image.open(image_path)
-                # Scale to height 40
-                ratio = 40 / img.height
-                new_width = int(img.width * ratio)
-                img = img.resize((new_width, 40), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(img)
-
-                label = tk.Label(parent, image=photo, cursor="hand2")
-                label.image = photo  # Keep reference
-                label.pack(side=tk.LEFT)
-                label.bind("<Button-1>", lambda e: self._open_discord())
-            else:
-                # Fallback to text
-                self._create_text_button(
-                    parent,
-                    "Osiris DevWorks",
-                    "#1a1f2e",
-                    ACCENT_COLOR,
-                    self._open_discord
-                )
-        except Exception as e:
-            logger.error(f"Failed to load Osiris image: {e}")
-            self._create_text_button(
-                parent,
-                "Osiris DevWorks",
-                "#1a1f2e",
-                ACCENT_COLOR,
-                self._open_discord
-            )
-
-    def _create_paypal_button(self, parent):
-        """Create PayPal donation button"""
-        try:
-            # Try to load image
-            image_path = get_resource_path(os.path.join("assets", "paypal.png"))
-            if os.path.exists(image_path):
-                img = Image.open(image_path)
-                # Scale to height 40
-                ratio = 40 / img.height
-                new_width = int(img.width * ratio)
-                img = img.resize((new_width, 40), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(img)
-
-                label = tk.Label(parent, image=photo, cursor="hand2")
-                label.image = photo  # Keep reference
-                label.pack(side=tk.LEFT)
-                label.bind("<Button-1>", lambda e: self._open_paypal())
-            else:
-                # Fallback to text
-                self._create_text_button(
-                    parent,
-                    "PayPal",
-                    "#0070ba",
-                    "white",
-                    self._open_paypal
-                )
-        except Exception as e:
-            logger.error(f"Failed to load PayPal image: {e}")
-            self._create_text_button(
-                parent,
-                "PayPal",
-                "#0070ba",
-                "white",
-                self._open_paypal
-            )
-
-    def _create_venmo_button(self, parent):
-        """Create Venmo donation button"""
-        try:
-            # Try to load image
-            image_path = get_resource_path(os.path.join("assets", "venmo.png"))
-            if os.path.exists(image_path):
-                img = Image.open(image_path)
-                # Scale to height 40
-                ratio = 40 / img.height
-                new_width = int(img.width * ratio)
-                img = img.resize((new_width, 40), Image.Resampling.LANCZOS)
-                photo = ImageTk.PhotoImage(img)
-
-                label = tk.Label(parent, image=photo, cursor="hand2")
-                label.image = photo  # Keep reference
-                label.pack(side=tk.LEFT)
-                label.bind("<Button-1>", lambda e: self._open_venmo())
-            else:
-                # Fallback to text
-                self._create_text_button(
-                    parent,
-                    "Venmo",
-                    "#008CFF",
-                    "white",
-                    self._open_venmo
-                )
-        except Exception as e:
-            logger.error(f"Failed to load Venmo image: {e}")
-            self._create_text_button(
-                parent,
-                "Venmo",
-                "#008CFF",
-                "white",
-                self._open_venmo
-            )
-
-    def _create_text_button(self, parent, text, bg, fg, command):
-        """Create a styled text button"""
+        The label background matches the window so the transparent PNGs sit
+        directly on the navy, as in Smart Citizen's footer.
+        """
         label = tk.Label(
             parent,
-            text=text,
-            bg=bg,
-            fg=fg,
-            font=("Segoe UI", 9, "bold"),
-            padx=12,
-            pady=8,
+            bg=theme.WINDOW_BG,
             cursor="hand2",
-            relief=tk.RAISED,
-            borderwidth=1
+            borderwidth=0,
+            highlightthickness=0
         )
-        label.pack(side=tk.LEFT)
-        label.bind("<Button-1>", lambda e: command())
+        try:
+            image_path = get_resource_path(os.path.join("assets", image_name))
+            img = Image.open(image_path)
+            width = int(img.width * FOOTER_IMAGE_HEIGHT / img.height)
+            img = img.resize((width, FOOTER_IMAGE_HEIGHT), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            label.config(image=photo)
+            label.image = photo  # Keep reference
+        except Exception as e:
+            logger.warning(f"Failed to load {image_name}: {e}")
+            label.config(
+                text=fallback_text.upper(),
+                fg=theme.TITLE_COLOR,
+                font=(theme.UI_FONT, 9, "bold")
+            )
+        label.bind("<Button-1>", lambda e: webbrowser.open(url))
+        return label
+
+    def _build_status_bar(self, parent):
+        """Status text on the left, version on the right (Smart Citizen status bar)"""
+        bar = tk.Frame(parent, bg=theme.PANEL_BG)
+        bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        self.status_label = tk.Label(
+            bar,
+            text="Ready",
+            bg=theme.PANEL_BG,
+            fg=theme.TEXT,
+            font=(theme.UI_FONT, 8),
+            anchor=tk.W,
+            padx=8,
+            pady=3
+        )
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.version_label = tk.Label(
+            bar,
+            text=f"v{self.version}",
+            bg=theme.PANEL_BG,
+            fg=theme.TEXT,
+            font=(theme.UI_FONT, 8),
+            padx=8,
+            pady=3,
+            cursor="hand2"
+        )
+        self.version_label.pack(side=tk.RIGHT)
+        self.version_label.bind("<Button-1>", lambda e: self._on_version_clicked())
+
+    # ---------------------------------------------------------------- logging
 
     def _setup_logging(self):
         """Set up logging to the GUI text widget"""
-        # Create handler
         handler = TextHandler(self.log_text)
         handler.setLevel(logging.INFO)
         handler.setFormatter(SimpleFormatter())
-
-        # Add to root logger
         logging.getLogger().addHandler(handler)
+
+    # --------------------------------------------------------------- settings
 
     def _load_settings(self):
         """Load settings and update UI"""
-        # Load keys configuration (maximum of 3)
         keys_config = self.settings.get('keys_config', [])
 
         # Handle backward compatibility with old 'keys' format
@@ -425,165 +345,123 @@ class MainWindow:
             old_press_twice = self.settings.get('press_twice', False)
             keys_config = [{'key': k, 'press_twice': old_press_twice} for k in old_keys]
 
-        # Limit to first 3 keys
-        keys_config = keys_config[:3]
-
-        for config in keys_config:
+        for config in keys_config[:MAX_KEYS]:
             key_name = config.get('key', config) if isinstance(config, dict) else config
             press_twice = config.get('press_twice', False) if isinstance(config, dict) else False
             self._add_key_widget(key_name, press_twice)
 
-        # Disable add button if we have 3 keys
-        if len(self.key_frames) >= 3:
-            self.add_key_button.config(state='disabled')
+        self._refresh_add_button()
 
-        # Load intervals
         self.min_interval_var.set(self.settings.get('min_interval_minutes', 10))
         self.max_interval_var.set(self.settings.get('max_interval_minutes', 14))
 
+    def _refresh_add_button(self, enabled=True):
+        """Enable Add Key unless running or at the key limit"""
+        self._set_button_enabled(
+            self.add_key_button,
+            theme.BUTTON_GOLD,
+            enabled and len(self.key_rows) < MAX_KEYS
+        )
+
     def _add_key(self):
         """Add a new key via detection dialog"""
-        # Check if we already have 3 keys (maximum)
-        if len(self.key_frames) >= 3:
+        if len(self.key_rows) >= MAX_KEYS:
             messagebox.showwarning(
                 "Maximum Keys Reached",
                 "You can only configure a maximum of 3 keys.\n\nDelete an existing key before adding a new one."
             )
             return
 
-        # Disable control during detection
-        self.add_key_button.config(state='disabled')
+        self._set_button_enabled(self.add_key_button, theme.BUTTON_GOLD, False)
         self.root.update()
 
-        # Show key selection dialog
         key = select_key(self.root)
-
-        # Re-enable control
-        self.add_key_button.config(state='normal')
 
         if key:
             self._add_key_widget(key)
             self._on_settings_changed()
 
-            # Update add button state if we reached max
-            if len(self.key_frames) >= 3:
-                self.add_key_button.config(state='disabled')
+        self._refresh_add_button()
 
     def _add_key_widget(self, key_name, press_twice=False):
         """
-        Add a key widget to the keys container.
+        Add a key row to the keys container.
 
         Args:
             key_name: Name of the key
             press_twice: Whether to press this key twice
         """
-        # Create frame for this key
+        row = {'key': key_name}
         key_frame = ttk.Frame(self.keys_container)
-        key_frame.pack(fill=tk.X, pady=2)
+        key_frame.pack(fill=tk.X, pady=3)
+        row['frame'] = key_frame
 
-        # Key label
-        key_label = ttk.Label(
+        row['label'] = tk.Label(
             key_frame,
             text=key_name.upper(),
-            font=("Segoe UI", 10),
+            font=(theme.UI_FONT, 10, "bold"),
             width=10,
-            relief=tk.SUNKEN,
-            borderwidth=1
+            bg=theme.PANEL_BG,
+            fg=theme.TEXT,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=theme.BORDER,
+            pady=2
         )
-        key_label.pack(side=tk.LEFT, padx=(0, 10))
+        row['label'].pack(side=tk.LEFT, padx=(0, 10))
 
-        # Delete button
-        delete_button = ttk.Button(
-            key_frame,
-            text="Delete",
-            command=lambda: self._remove_key_widget(key_frame)
+        row['delete'] = self._action_button(
+            key_frame, "Delete", theme.BUTTON_SLATE,
+            lambda: self._remove_key_widget(row)
         )
-        delete_button.pack(side=tk.LEFT, padx=(0, 10))
+        row['delete'].pack(side=tk.LEFT, padx=(0, 8))
 
-        # Change Key button
-        select_button = ttk.Button(
-            key_frame,
-            text="Change Key...",
-            command=lambda: self._replace_key(key_frame)
+        row['change'] = self._action_button(
+            key_frame, "Change Key...", theme.BUTTON_GOLD,
+            lambda: self._replace_key(row)
         )
-        select_button.pack(side=tk.LEFT, padx=(0, 10))
+        row['change'].pack(side=tk.LEFT, padx=(0, 12))
 
-        # Use toggle behavior checkbox
-        press_twice_var = tk.BooleanVar(value=press_twice)
-        press_twice_check = ttk.Checkbutton(
+        row['press_twice'] = tk.BooleanVar(value=press_twice)
+        row['check'] = ttk_bootstrap.Checkbutton(
             key_frame,
             text="Use Toggle Behavior",
-            variable=press_twice_var,
+            variable=row['press_twice'],
             command=self._on_settings_changed
         )
-        press_twice_check.pack(side=tk.LEFT)
+        row['check'].pack(side=tk.LEFT)
 
-        # Store reference (key_frame, key_name, press_twice_var)
-        self.key_frames.append((key_frame, key_name, press_twice_var))
+        self.key_rows.append(row)
 
-    def _remove_key_widget(self, key_frame):
-        """
-        Remove a key widget.
-
-        Args:
-            key_frame: Frame to remove
-        """
-        # Remove from list
-        self.key_frames = [(f, k, v) for f, k, v in self.key_frames if f != key_frame]
-
-        # Destroy widget
-        key_frame.destroy()
-
-        # Re-enable add button if we were at max
-        if len(self.key_frames) < 3:
-            self.add_key_button.config(state='normal')
-
-        # Save settings
+    def _remove_key_widget(self, row):
+        """Remove a key row"""
+        self.key_rows.remove(row)
+        row['frame'].destroy()
+        self._refresh_add_button()
         self._on_settings_changed()
 
-    def _replace_key(self, key_frame):
-        """
-        Replace a key.
-
-        Args:
-            key_frame: Frame containing the key
-        """
-        # Show key selection dialog
+    def _replace_key(self, row):
+        """Replace the key in a row via the detection dialog"""
         new_key = select_key(self.root)
-
         if new_key:
-            # Update the key name in the frame
-            for widget in key_frame.winfo_children():
-                if isinstance(widget, ttk.Label):
-                    widget.config(text=new_key.upper())
-                    break
-
-            # Update in key_frames list
-            for i, (f, k, v) in enumerate(self.key_frames):
-                if f == key_frame:
-                    self.key_frames[i] = (f, new_key, v)
-                    break
-
-            # Save settings
+            row['key'] = new_key
+            row['label'].config(text=new_key.upper())
             self._on_settings_changed()
+
+    def _keys_config(self):
+        return [{'key': r['key'], 'press_twice': r['press_twice'].get()} for r in self.key_rows]
 
     def _on_settings_changed(self):
         """Handle settings change"""
-        # Get current keys with press_twice settings
-        keys_config = [
-            {'key': k, 'press_twice': v.get()}
-            for f, k, v in self.key_frames
-        ]
-
-        # Update settings
-        self.settings.set('keys_config', keys_config)
+        self.settings.set('keys_config', self._keys_config())
         self.settings.set('min_interval_minutes', self.min_interval_var.get())
         self.settings.set('max_interval_minutes', self.max_interval_var.get())
 
+    # ---------------------------------------------------------------- running
+
     def _start_pressing(self):
         """Start key pressing"""
-        # Validate settings
-        if not self.key_frames:
+        if not self.key_rows:
             messagebox.showwarning("No Keys", "Please add at least one key to press.")
             return
 
@@ -597,63 +475,42 @@ class MainWindow:
             )
             return
 
-        # Get keys configuration
-        keys_config = [
-            {'key': k, 'press_twice': v.get()}
-            for f, k, v in self.key_frames
-        ]
+        keys_config = self._keys_config()
 
         # Update buttons FIRST
-        self.start_button.config(state='disabled')
-        self.stop_button.config(state='normal')
+        self._set_running(True)
         self.root.update()  # Force GUI to update immediately
 
-        # Create and start key presser in a separate thread to avoid blocking
-        try:
-            def start_thread():
-                try:
-                    self.key_presser = KeyPresser(
-                        keys_config=keys_config,
-                        min_interval_minutes=min_int,
-                        max_interval_minutes=max_int,
-                        status_callback=self._on_key_presser_status
-                    )
-                    self.key_presser.start()
-                    logger.info("Key presser started successfully")
-                except Exception as e:
-                    logger.error(f"Failed to start key pressing: {e}", exc_info=True)
-                    self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to start key pressing:\n{e}"))
-                    # Reset buttons on error
-                    self.root.after(0, lambda: self.start_button.config(state='normal'))
-                    self.root.after(0, lambda: self.stop_button.config(state='disabled'))
-                    self.root.after(0, self._set_config_enabled, True)
+        def start_thread():
+            try:
+                self.key_presser = KeyPresser(
+                    keys_config=keys_config,
+                    min_interval_minutes=min_int,
+                    max_interval_minutes=max_int,
+                    status_callback=self._on_key_presser_status
+                )
+                self.key_presser.start()
+                logger.info("Key presser started successfully")
+            except Exception as e:
+                logger.error(f"Failed to start key pressing: {e}", exc_info=True)
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to start key pressing:\n{e}"))
+                self.root.after(0, self._set_running, False)
 
-            import threading
-            setup_thread = threading.Thread(target=start_thread, daemon=True)
-            setup_thread.start()
-
-            # Disable configuration
-            self._set_config_enabled(False)
-
-        except Exception as e:
-            logger.error(f"Failed to start key pressing: {e}", exc_info=True)
-            messagebox.showerror("Error", f"Failed to start key pressing:\n{e}")
-            # Reset button states
-            self.start_button.config(state='normal')
-            self.stop_button.config(state='disabled')
-            self._set_config_enabled(True)
+        threading.Thread(target=start_thread, daemon=True).start()
 
     def _stop_pressing(self):
         """Stop key pressing"""
         if self.key_presser:
             self.key_presser.stop()
+        self._set_running(False)
 
-        # Update buttons
-        self.start_button.config(state='normal')
-        self.stop_button.config(state='disabled')
-
-        # Enable configuration
-        self._set_config_enabled(True)
+    def _set_running(self, running):
+        """Swap Start/Stop and lock the configuration while running"""
+        self._set_button_enabled(self.start_button, theme.BUTTON_SAGE, not running)
+        self._set_button_enabled(self.stop_button, theme.BUTTON_COPPER, running)
+        self._set_config_enabled(not running)
+        if not running:
+            self._pending_status = "Ready"
 
     def _set_config_enabled(self, enabled):
         """
@@ -662,50 +519,48 @@ class MainWindow:
         Args:
             enabled: True to enable, False to disable
         """
-        state = 'normal' if enabled else 'disabled'
-
-        # Disable add key button and key widgets
-        self.add_key_button.config(state=state)
-
-        for key_frame, key_name, press_twice_var in self.key_frames:
-            for widget in key_frame.winfo_children():
-                if isinstance(widget, tk.Button) or isinstance(widget, ttk.Button):
-                    widget.config(state=state)
+        self._refresh_add_button(enabled)
+        for row in self.key_rows:
+            self._set_button_enabled(row['delete'], theme.BUTTON_SLATE, enabled)
+            self._set_button_enabled(row['change'], theme.BUTTON_GOLD, enabled)
 
     def _on_key_presser_status(self, message):
         """
-        Handle status message from key presser.
+        Handle status message from the key presser thread.
 
-        Args:
-            message: Status message
+        Only stores the text; _poll_status shows it from the Tk thread.
         """
-        # Message is already logged by the key presser, just display in UI
-        pass
+        self._pending_status = message
 
-    def _open_discord(self):
-        """Open Osiris DevWorks Discord"""
-        webbrowser.open("https://discord.gg/BNzRegKZ7k")
+    def _poll_status(self):
+        """Copy the latest key presser status into the status bar"""
+        if self._pending_status is not None:
+            self.status_label.config(text=self._pending_status)
+            self._pending_status = None
+        self.root.after(250, self._poll_status)
 
-    def _open_paypal(self):
-        """Open PayPal donation page"""
-        webbrowser.open("https://www.paypal.com/ncp/payment/YAWXHMGZH8T76")
+    # ---------------------------------------------------------------- updates
 
-    def _open_venmo(self):
-        """Open Venmo donation page"""
-        webbrowser.open("https://venmo.com/u/Amr-Abouelleil")
+    def _on_version_clicked(self):
+        """Version label: open the update prompt if one is known, else check now"""
+        if self._available_update:
+            UpdateDialog(self.root, self._available_update, self.version, on_restart=self._on_close)
+        else:
+            self._check_for_updates(True)
 
     def _check_for_updates(self, manual):
         """
         Check GitHub for a newer release on a worker thread.
 
         Args:
-            manual: True when the user clicked the link, so we also report
+            manual: True when the user clicked the version, so we also report
                 "up to date" and errors instead of staying quiet
         """
         if self._update_check_running:
             return
         self._update_check_running = True
-        self.update_link.config(text="Checking...")
+        if manual:
+            self.status_label.config(text="Checking for updates...")
 
         def worker():
             try:
@@ -726,26 +581,29 @@ class MainWindow:
             return
 
         self._update_check_running = False
-        self.update_link.config(text="Check for updates")
 
         if status == "error":
             if manual:
+                self.status_label.config(text="Update check failed")
                 messagebox.showwarning(
                     "Update Check Failed",
                     f"Couldn't reach GitHub to check for updates:\n{result}"
                 )
         elif result is None:
             if manual:
-                messagebox.showinfo("No Updates", f"You're on the latest version (v{self.version}).")
+                self.status_label.config(text=f"You're on the latest version (v{self.version})")
         else:
             logger.info(f"Update available: v{result['version']}")
+            self._available_update = result
+            # Like Smart Citizen, the version indicator lights up when an update exists
+            self.version_label.config(
+                text=f"v{self.version}  →  v{result['version']} available",
+                fg=theme.LINK
+            )
             UpdateDialog(self.root, result, self.version, on_restart=self._on_close)
 
     def _on_close(self):
         """Handle window close event"""
-        # Stop key presser if running
         if self.key_presser and self.key_presser.is_running():
             self.key_presser.stop()
-
-        # Close window
         self.root.destroy()

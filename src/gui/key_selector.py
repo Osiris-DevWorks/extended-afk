@@ -5,6 +5,8 @@ import threading
 from pynput import keyboard as pynput_keyboard
 import logging
 
+from gui import theme
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,7 +22,7 @@ class KeySelectorDialog(tk.Toplevel):
         """
         super().__init__(parent)
         self.title("Select Key")
-        self.geometry("350x200")
+        self.geometry("350x240")
         self.resizable(False, False)
 
         # Make modal
@@ -73,10 +75,8 @@ class KeySelectorDialog(tk.Toplevel):
         self.status_label.pack(expand=True)
 
         # Cancel button
-        self.cancel_button = ttk.Button(
-            main_frame,
-            text="Cancel",
-            command=self._on_cancel
+        self.cancel_button = theme.action_button(
+            main_frame, "Cancel", theme.BUTTON_SLATE, self._on_cancel
         )
         self.cancel_button.pack()
 
