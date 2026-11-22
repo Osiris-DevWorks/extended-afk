@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Restored the v1.0.2 window layout: the title no longer carries the version and the version / "Check for updates" row under the footer is gone. Extended AFK still checks for updates when it starts and shows the update prompt when one is available.
+- New look that matches Smart Citizen: the Osiris DevWorks navy and gold theme, a branded title, flat gold, sage and copper buttons, and the Osiris, Discord and donation links along the bottom
+- A status bar along the bottom shows when the next key press is due, and the version on its right. Click the version to check for updates; it lights up when a new version is out
+- The update and key detection dialogs use the same theme
 
 ## [1.0.3] - 2026-10-28
 

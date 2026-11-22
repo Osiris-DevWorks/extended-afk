@@ -67,8 +67,8 @@ def main():
     setup_logging()
 
     try:
-        # Create themed tkinter root window using system theme
-        # Use darkly theme which automatically adapts to Windows theme
+        # Start from darkly; MainWindow switches to the Osiris DevWorks
+        # theme (gui/theme.py) shared with Smart Citizen
         root = ttk_bootstrap.Window(themename="darkly")
 
         # Create main window
