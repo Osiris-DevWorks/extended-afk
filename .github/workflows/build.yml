@@ -5,8 +5,10 @@ name: Build
 # testing; publishing happens in release.yml.
 
 on:
+  # The release PR, hotfix PRs into main, and contributor PRs into a release branch. Feature
+  # work is pushed straight to release/X.Y.Z and runs nothing.
   pull_request:
-    branches: [main]
+    branches: [main, "release/**"]
   workflow_dispatch:
 
 concurrency:

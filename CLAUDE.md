@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Osiris DevWorks development pipeline (universal)
+
+This section is identical in every Osiris DevWorks repo's CLAUDE.md. Change it in all of them at once. The line just below it says how this repo applies it. Where an older section of this file conflicts with it, this section wins.
+
+The goal is little friction and few GitHub Actions runs: checks and code review run once per release, not once per feature.
+
+1. **Grill the idea.** When Amr brings a new idea, ask questions until it is ready to build. Ask every question as a multiple-choice decision card (`request_decision`, or `AskUserQuestion` in the CLI) with a recommended option, never as questions in prose. A few cards at a time is fine.
+2. **Mock up any UI.** When a feature adds or changes UI, show an HTML Artifact mockup during grilling. Build it from the app's real colors, fonts, spacing and layout, read from the source, and show the current screen next to the changed one. Grilling isn't done until Amr approves the mockup.
+3. **Grilling sign-off is the approval.** Once Amr says the idea is ready, build it without further check-ins: no step-by-step plan approvals, no code-block reviews, and no commit-message review. Ask again only if the work hits a choice that grilling did not settle.
+4. **Push straight to the integration branch, with no feature PR.** Run the repo's tests, lint and type check in your own session. Update this repo's test plan, if it has one, with concrete pass/fail items for the feature. Then push **one squashed commit per feature** to the integration branch, with a message like `#123: short summary` (`Fixes #123` in the body when it closes the issue). A feature branch is fine while you work; only the squashed result lands. Never force-push the integration branch.
+5. **Release: one PR, all checks, one review.** When Amr calls a release, open one PR from the integration branch to production. Every pre-release check and the code review run on that PR, once. Fix what they find with more commits on the integration branch. Amr runs the test plan (on preview builds or staging) and merges, or tells you to merge.
+6. **Hotfixes.** For an urgent production fix, branch off production, open a PR straight to production (full checks and review run on it), and once it merges, merge production back into the integration branch.
+7. **Outside PRs.** Contributor and Dependabot PRs get CI only, with no Claude review bot. Dependabot is grouped and runs monthly.
+8. **Workflow triggers.** Keep workflows off feature work: no `push` triggers on integration branches except where a deploy needs one, and the Claude review workflow runs only on PRs into production. Don't add a workflow that runs on every push without Amr's OK.
+
+**How this repo applies it: desktop app.** The integration branch is the active `release/X.Y.Z` (opened off `main` by `/start_release`, named for the version it will ship) and production is `main`. There are no automated tests, so "run the tests" means `python -m compileall -q src scripts`, a local build, and a run of the app. The test plan is `docs/TEST_PLAN.md`: each feature push adds its own `### #issue: short name` section of pass/fail items. Amr runs it on the exe that the release PR's **Build** workflow uploads, before the PR merges. The code review is a `/code-review` pass on that PR during `/release`. See `docs/RELEASE_PROCESS.md`.
+
 ## What this is
 
 Extended AFK is a Windows-only GUI utility that presses configured keyboard keys at random intervals to prevent AFK timeouts in games. ttkbootstrap (tkinter) for the GUI, the `keyboard` library for simulating presses, `pynput` for detecting which key the user wants. Ships as a single portable `.exe` (PyInstaller onefile), no installer.
@@ -15,7 +32,7 @@ python -m PyInstaller extended-afk.spec --clean --noconfirm  # build dist/Extend
 python scripts/release_tools.py check                    # VERSION.TXT, spec and changelog agree
 ```
 
-There are no automated tests; verify changes by running the app and watching the Activity Log (and `%APPDATA%\extended-afk\logs\extended-afk.log`). The **Build** workflow (`.github/workflows/build.yml`) builds the exe on every PR and uploads it as an artifact for testing.
+There are no automated tests; verify changes by running the app and watching the Activity Log (and `%APPDATA%\extended-afk\logs\extended-afk.log`). The **Build** workflow (`.github/workflows/build.yml`) builds the exe on PRs into `main` and `release/**` (the release PR, hotfix and contributor PRs) and uploads it as an artifact for testing.
 
 ## Architecture
 
@@ -36,6 +53,6 @@ Small three-layer app under `src/`:
 
 Version lives in three places that must stay in sync: `VERSION.TXT`, `docs/CHANGELOG.md`, and the hardcoded exe name in `extended-afk.spec` (`name='ExtendedAFK-vX.Y.Z'`). Bump all three together.
 
-The release flow is documented in `docs/RELEASE_PROCESS.md` and driven by the `/release` command (`.claude/commands/release.md`). Like Smart Citizen, merging a version bump to `main` is the release: `.github/workflows/release.yml` runs on every push to main, and if no release exists for `VERSION.TXT`'s version it checks the three version files (`scripts/release_tools.py check`), builds the exe on Windows, creates and pushes the `vX.Y.Z` tag, publishes the GitHub release with the exe attached and the changelog section as notes, then announces via `scripts/discord_notify.py` (needs the `DISCORD_RELEASE_WEBHOOK_URL` repo secret, or `.env` when run locally). The GitHub release must be live before the Discord post fires. The asset must stay named `ExtendedAFK-vX.Y.Z.exe` or the in-app updater won't find it.
+The release flow is documented in `docs/RELEASE_PROCESS.md` and driven by `/start_release` (opens the next `release/X.Y.Z`) and `/release` (bumps the version on it and opens the release PR). Like Smart Citizen, merging the release branch, with its version bump, to `main` is the release: `.github/workflows/release.yml` runs on every push to main, and if no release exists for `VERSION.TXT`'s version it checks the three version files (`scripts/release_tools.py check`), builds the exe on Windows, creates and pushes the `vX.Y.Z` tag, publishes the GitHub release with the exe attached and the changelog section as notes, then announces via `scripts/discord_notify.py` (needs the `DISCORD_RELEASE_WEBHOOK_URL` repo secret, or `.env` when run locally). The GitHub release must be live before the Discord post fires. The asset must stay named `ExtendedAFK-vX.Y.Z.exe` or the in-app updater won't find it.
 
-On every release, also update the Extended AFK entry in `../osiris-devworks-website/src/data/projects.ts` (sibling workspace repo): bump the static `version` fallback and refresh `features`/`status` for what shipped. The site auto-fetches the live version from this repo's `VERSION.TXT` on `main`, but everything else on the tile is manual. Pushing the website repo's `main` deploys it.
+On every release, also update the Extended AFK entry in `../osiris-devworks-website/src/data/projects.ts` (sibling workspace repo): bump the static `version` fallback and refresh `features`/`status` for what shipped. The site auto-fetches the live version from this repo's `VERSION.TXT` on `main`, but everything else on the tile is manual. That repo's own pipeline publishes it.
